@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from geobr import read_municipality
+import json
 
 st.set_page_config(page_title="Dashboard Geoespacial", layout="wide", page_icon="🌍")
 
@@ -28,6 +29,8 @@ def carregar_dados_espaciais():
 with st.spinner('Baixando malha municipal e processando geometrias...'):
     gdf_mt = carregar_dados_espaciais()
 
+geojson = json.loads(gdf_mt.to_json())
+
 # --- Barra Lateral ---
 st.sidebar.header("Filtros de Análise")
 variavel_mapa = st.sidebar.selectbox(
@@ -41,7 +44,7 @@ st.subheader("Mapa Coroplético Interativo")
 
 fig = px.choropleth_mapbox(
     gdf_mt,
-    geojson=gdf_mt.geometry,
+    geojson=geojson,
     locations=gdf_mt.index,
     color=variavel_mapa,
     color_continuous_scale="Viridis" if variavel_mapa == "reserva_legal_perc" else "YlOrRd",
@@ -49,6 +52,7 @@ fig = px.choropleth_mapbox(
     center={"lat": -12.64, "lon": -55.42},
     zoom=4.5,
     opacity=0.7,
+    featureidkey="properties.name_muni",
     labels={'reserva_legal_perc': 'Reserva Legal (%)', 'creditos_carbono': 'Créditos'}
 )
 
@@ -62,9 +66,9 @@ st.markdown("---")
 
 # Verifica se o usuário clicou em algum ponto do mapa
 municipios_clicados = []
-if mapa_evento and len(mapa_evento.selection.points) > 0:
+if mapa_evento and "selection" in mapa_evento and len(mapa_evento["selection"]["points"]) > 0:
     # Extrai os nomes dos municípios clicados (que estão no 'location' do Plotly)
-    municipios_clicados = [ponto["location"] for ponto in mapa_evento.selection.points]
+    municipios_clicados = [ponto["location"] for ponto in mapa_evento["selection"]["points"]]
 
 # Filtra o dataframe com base no clique, ou mostra tudo se nada foi clicado
 if municipios_clicados:

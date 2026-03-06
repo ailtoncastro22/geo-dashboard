@@ -4,3 +4,7 @@ numpy
 geopandas
 plotly
 geobr
+geopandas
+plotly
+>>>>>>> 43fec5b811c105ca2f5f71df0bb308464a055f4c
+geobr

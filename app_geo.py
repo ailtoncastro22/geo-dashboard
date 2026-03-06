@@ -3,33 +3,32 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from geobr import read_municipality
-import json
 
+# Configuração da página
 st.set_page_config(page_title="Dashboard Geoespacial", layout="wide", page_icon="🌍")
 
-st.title("🌍 Monitoramento Territorial e Ambiental")
-st.markdown("Clique em um ou mais municípios no mapa para atualizar os dados abaixo.")
+st.title("🌍 Monitorização Territorial e Ambiental")
+st.markdown("Clique num ou mais municípios no mapa para atualizar os dados abaixo.")
 
 @st.cache_data
 def carregar_dados_espaciais():
-    # 1. Baixa os limites municipais do Mato Grosso usando geobr
-    gdf = read_municipality(code_muni="MT", year=2020)
-    gdf = gdf.to_crs(epsg=4326)
+    # 1. Lê o ficheiro local instantaneamente (sem depender da internet)
+    # Certifique-se de que o ficheiro 'mt_municipios.geojson' está na mesma pasta no GitHub
+    gdf = gpd.read_file('mt_municipios.geojson')
     
-    # 2. Gerando dados fictícios para a simulação do dashboard
+    # 2. Gerar dados fictícios para a simulação do dashboard
     np.random.seed(42)
     gdf['reserva_legal_perc'] = np.random.uniform(15, 85, size=len(gdf))
     gdf['creditos_carbono'] = np.random.uniform(5000, 150000, size=len(gdf))
     
-    # Define o nome do município como index
-    gdf = gdf.set_index('name_muni')
+    # Define o nome do município como index (verifique se a coluna se chama 'name_muni')
+    if 'name_muni' in gdf.columns:
+        gdf = gdf.set_index('name_muni')
+    
     return gdf
 
-with st.spinner('Baixando malha municipal e processando geometrias...'):
+with st.spinner('A carregar a malha municipal e processar geometrias...'):
     gdf_mt = carregar_dados_espaciais()
-
-geojson = json.loads(gdf_mt.to_json())
 
 # --- Barra Lateral ---
 st.sidebar.header("Filtros de Análise")
@@ -42,17 +41,16 @@ variavel_mapa = st.sidebar.selectbox(
 # --- Construção do Mapa com Plotly Express ---
 st.subheader("Mapa Coroplético Interativo")
 
-fig = px.choropleth_map(
+fig = px.choropleth_mapbox(
     gdf_mt,
-    geojson=geojson,
+    geojson=gdf_mt.geometry,
     locations=gdf_mt.index,
     color=variavel_mapa,
     color_continuous_scale="Viridis" if variavel_mapa == "reserva_legal_perc" else "YlOrRd",
-    map_style="carto-positron",
-    center={"lat": -12.64, "lon": -55.42},
+    mapbox_style="carto-positron",
+    center={"lat": -12.64, "lon": -55.42}, # Centro aproximado do Mato Grosso
     zoom=4.5,
     opacity=0.7,
-    featureidkey="properties.name_muni",
     labels={'reserva_legal_perc': 'Reserva Legal (%)', 'creditos_carbono': 'Créditos'}
 )
 
@@ -64,18 +62,18 @@ mapa_evento = st.plotly_chart(fig, width="stretch", on_select="rerun", selection
 # --- Lógica de Atualização Baseada no Clique ---
 st.markdown("---")
 
-# Verifica se o usuário clicou em algum ponto do mapa
+# Verifica se o utilizador clicou em algum ponto do mapa
 municipios_clicados = []
-if mapa_evento and "selection" in mapa_evento and len(mapa_evento["selection"]["points"]) > 0:
+if mapa_evento and len(mapa_evento.selection.points) > 0:
     # Extrai os nomes dos municípios clicados (que estão no 'location' do Plotly)
-    municipios_clicados = [ponto["location"] for ponto in mapa_evento["selection"]["points"]]
+    municipios_clicados = [ponto["location"] for ponto in mapa_evento.selection.points]
 
-# Filtra o dataframe com base no clique, ou mostra tudo se nada foi clicado
+# Filtra o dataframe com base no clique, ou mostra tudo se nada foi selecionado
 if municipios_clicados:
     st.subheader(f"📍 Dados Atualizados: {', '.join(municipios_clicados)}")
     gdf_plot = gdf_mt.loc[municipios_clicados]
 else:
-    st.subheader("📍 Dados Gerais do Estado (Clique no mapa para filtrar)")
+    st.subheader("📍 Dados Gerais do Estado (Clique no mapa para filtrar, ex: Nova Marilândia, Santo Afonso)")
     gdf_plot = gdf_mt
 
 # Exibe métricas rápidas dos municípios filtrados

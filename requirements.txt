@@ -1,4 +1,4 @@
-streamlit==1.55.0
+<streamlit==1.55.0
 pandas==3.0.1
 numpy==2.4.2
 geopandas==1.1.0

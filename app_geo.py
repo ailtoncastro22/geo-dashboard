@@ -42,13 +42,13 @@ variavel_mapa = st.sidebar.selectbox(
 # --- Construção do Mapa com Plotly Express ---
 st.subheader("Mapa Coroplético Interativo")
 
-fig = px.choropleth_mapbox(
+fig = px.choropleth_map(
     gdf_mt,
     geojson=geojson,
     locations=gdf_mt.index,
     color=variavel_mapa,
     color_continuous_scale="Viridis" if variavel_mapa == "reserva_legal_perc" else "YlOrRd",
-    mapbox_style="carto-positron",
+    map_style="carto-positron",
     center={"lat": -12.64, "lon": -55.42},
     zoom=4.5,
     opacity=0.7,

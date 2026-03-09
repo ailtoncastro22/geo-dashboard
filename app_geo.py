@@ -11,8 +11,50 @@ warnings.filterwarnings('ignore', 'Geometry is in a geographic CRS')
 # Configuração da página
 st.set_page_config(page_title="Dashboard Geoespacial", layout="wide", page_icon="🌍")
 
-st.title("🌍 Monitorização Territorial e Ambiental")
-st.markdown("Selecione um município no **mapa** OU na **tabela** abaixo para aproximar a visão e analisar os dados.")
+# --- 1. Dicionário de Traduções ---
+st.sidebar.markdown("### 🌐 Idioma / Language")
+idioma = st.sidebar.radio("Selecione o idioma:", ["Português", "English"], label_visibility="collapsed")
+
+textos = {
+    "Português": {
+        "titulo": "🌍 Monitorização Territorial e Ambiental",
+        "subtitulo": "Selecione um município no **mapa** OU na **tabela** abaixo para aproximar a visão e analisar os dados.",
+        "loading": "A carregar a malha municipal...",
+        "filtros": "Filtros de Análise",
+        "sel_var": "Selecione a variável para o mapa:",
+        "opt_rl": "Cobertura de Reserva Legal (%)",
+        "opt_creditos": "Potencial de Créditos de Carbono",
+        "destaque": "📍 Destacando:",
+        "geral": "📍 Dados Gerais do Estado",
+        "lbl_rl": "Reserva Legal (%)",
+        "lbl_creditos": "Créditos",
+        "metrica_rl": "Média de Reserva Legal",
+        "metrica_creditos": "Total de Créditos de Carbono",
+        "tabela": "### Base de Dados (Selecione as linhas na lateral esquerda para filtrar o mapa)"
+    },
+    "English": {
+        "titulo": "🌍 Territorial and Environmental Monitoring",
+        "subtitulo": "Select a municipality on the **map** OR in the **table** below to zoom in and analyze the data.",
+        "loading": "Loading municipal grid...",
+        "filtros": "Analysis Filters",
+        "sel_var": "Select the map variable:",
+        "opt_rl": "Legal Reserve Coverage (%)",
+        "opt_creditos": "Carbon Credits Potential",
+        "destaque": "📍 Highlighting:",
+        "geral": "📍 General State Data",
+        "lbl_rl": "Legal Reserve (%)",
+        "lbl_creditos": "Credits",
+        "metrica_rl": "Average Legal Reserve",
+        "metrica_creditos": "Total Carbon Credits",
+        "tabela": "### Database (Select rows on the left side to filter the map)"
+    }
+}
+
+t = textos[idioma] # Carrega os textos consoante o idioma escolhido
+
+# --- Interface Principal ---
+st.title(t["titulo"])
+st.markdown(t["subtitulo"])
 
 @st.cache_data
 def carregar_dados_espaciais():
@@ -24,55 +66,52 @@ def carregar_dados_espaciais():
         gdf = gdf.set_index('name_muni')
     return gdf
 
-with st.spinner('A carregar a malha municipal...'):
+with st.spinner(t["loading"]):
     gdf_mt = carregar_dados_espaciais()
 
 # --- Barra Lateral ---
-st.sidebar.header("Filtros de Análise")
+st.sidebar.markdown("---")
+st.sidebar.header(t["filtros"])
+
 variavel_mapa = st.sidebar.selectbox(
-    "Selecione a variável para o mapa:",
+    t["sel_var"],
     options=["reserva_legal_perc", "creditos_carbono"],
-    format_func=lambda x: "Cobertura de Reserva Legal (%)" if x == "reserva_legal_perc" else "Potencial de Créditos de Carbono"
+    format_func=lambda x: t["opt_rl"] if x == "reserva_legal_perc" else t["opt_creditos"]
 )
 
 # 1. Preparamos a tabela de exibição
 df_exibicao = gdf_mt.drop(columns=['geometry']).sort_values(by=variavel_mapa, ascending=False)
 
-# 2. Lógica Unificada de Captura (Lê a sessão do Mapa e da Tabela antes de tudo)
+# 2. Lógica Unificada de Captura
 municipios_selecionados = []
 
-# Verifica se o utilizador clicou na tabela
 if "tabela_interativa" in st.session_state:
     linhas_selecionadas = st.session_state.tabela_interativa.get("selection", {}).get("rows", [])
     if linhas_selecionadas:
         municipios_selecionados.extend(df_exibicao.iloc[linhas_selecionadas].index.tolist())
 
-# Verifica se o utilizador clicou diretamente no mapa
 if "mapa_interativo" in st.session_state:
     pontos_selecionados = st.session_state.mapa_interativo.get("selection", {}).get("points", [])
     if pontos_selecionados:
         municipios_selecionados.extend([p["location"] for p in pontos_selecionados])
 
-# Remove duplicações caso o clique venha dos dois lados
 municipios_selecionados = list(set(municipios_selecionados))
 
 # 3. Define os dados filtrados e a CENTRALIZAÇÃO DINÂMICA
 if municipios_selecionados:
     gdf_plot = gdf_mt.loc[municipios_selecionados]
-    st.subheader(f"📍 Destacando: {', '.join(municipios_selecionados)}")
+    st.subheader(f"{t['destaque']} {', '.join(municipios_selecionados)}")
     
-    # Calcula a média do centro (latitude e longitude) das cidades selecionadas
     centro_lat = float(gdf_plot.geometry.centroid.y.mean())
     centro_lon = float(gdf_plot.geometry.centroid.x.mean())
-    nivel_zoom = 6.5 # Zoom mais aproximado
+    nivel_zoom = 6.5 
 else:
     gdf_plot = gdf_mt
-    st.subheader("📍 Dados Gerais do Estado")
+    st.subheader(t["geral"])
     
-    # Centro padrão de Mato Grosso
     centro_lat = -12.64
     centro_lon = -55.42
-    nivel_zoom = 4.5 # Zoom afastado mostrando o estado todo
+    nivel_zoom = 4.5 
 
 # --- Construção do Mapa ---
 fig = px.choropleth_mapbox(
@@ -82,15 +121,14 @@ fig = px.choropleth_mapbox(
     color=variavel_mapa,
     color_continuous_scale="Viridis" if variavel_mapa == "reserva_legal_perc" else "YlOrRd",
     mapbox_style="carto-positron",
-    center={"lat": centro_lat, "lon": centro_lon}, # Usa as coordenadas dinâmicas
-    zoom=nivel_zoom,                               # Usa o zoom dinâmico
+    center={"lat": centro_lat, "lon": centro_lon}, 
+    zoom=nivel_zoom,                               
     opacity=0.7,
-    labels={'reserva_legal_perc': 'Reserva Legal (%)', 'creditos_carbono': 'Créditos'}
+    labels={'reserva_legal_perc': t['lbl_rl'], 'creditos_carbono': t['lbl_creditos']}
 )
 
 fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
-# Renderiza o mapa com a chave ligada à sessão
 st.plotly_chart(
     fig, 
     width="stretch", 
@@ -103,12 +141,12 @@ st.plotly_chart(
 st.markdown("---")
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("Média de Reserva Legal", f"{gdf_plot['reserva_legal_perc'].mean():.2f}%")
+    st.metric(t["metrica_rl"], f"{gdf_plot['reserva_legal_perc'].mean():.2f}%")
 with col2:
-    st.metric("Total de Créditos de Carbono", f"{gdf_plot['creditos_carbono'].sum():,.0f}")
+    st.metric(t["metrica_creditos"], f"{gdf_plot['creditos_carbono'].sum():,.0f}")
 
 # --- Tabela Interativa ---
-st.markdown("### Base de Dados (Selecione as linhas na lateral esquerda para filtrar o mapa)")
+st.markdown(t["tabela"])
 st.dataframe(
     df_exibicao, 
     width=1000,
